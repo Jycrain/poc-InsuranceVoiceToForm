@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IVF — Rapports d'expertise</title>
+<style>
+:root {
+  --primary: #4f46e5; --primary-dark: #4338ca; --primary-light: #ede9fe;
+  --bg: #f1f5f9; --white: #fff; --border: #e2e8f0;
+  --text: #0f172a; --muted: #64748b; --muted-light: #94a3b8;
+  --success: #22c55e; --success-bg: #dcfce7; --success-text: #15803d;
+  --warning-bg: #fef3c7; --warning-text: #92400e;
+  --danger: #ef4444; --danger-bg: #fee2e2; --danger-text: #b91c1c;
+  --blue-bg: #dbeafe; --blue-text: #1e40af;
+  --sidebar-w: 240px; --topbar-h: 56px; --radius: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+button { cursor: pointer; font-family: inherit; font-size: 14px; }
+input, textarea, select { font-family: inherit; font-size: 14px; }
+
+/* ── UTILS ── */
+.hidden { display: none !important; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.badge-gray   { background: #f1f5f9; color: #475569; }
+.badge-blue   { background: var(--blue-bg); color: var(--blue-text); }
+.badge-green  { background: var(--success-bg); color: var(--success-text); }
+.badge-red    { background: var(--danger-bg); color: var(--danger-text); }
+.badge-yellow { background: #fef9c3; color: #854d0e; }
+.badge-purple { background: var(--primary-light); color: var(--primary); }
+.badge-orange { background: #ffedd5; color: #9a3412; }
+
+/* ── BTN ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: var(--radius); border: 1px solid transparent; font-weight: 500; transition: background .15s, opacity .15s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-ghost   { background: transparent; border-color: var(--border); color: var(--text); }
+.btn-ghost:hover { background: var(--bg); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-danger { background: var(--danger-bg); color: var(--danger-text); border-color: #fca5a5; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── FORM CONTROLS ── */
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.field input, .field select, .field textarea {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px; outline: none; background: var(--white);
+  transition: border-color .15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); }
+.field textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+.field input.auto-filled, .field textarea.auto-filled { border-color: var(--primary); background: #f5f3ff; }
+
+.toggle-group { display: flex; gap: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.toggle-group button { border: none; background: var(--white); padding: 7px 16px; color: var(--muted); font-weight: 500; transition: background .15s, color .15s; }
+.toggle-group button.active { background: var(--primary); color: #fff; }
+.toggle-group button:not(.active):hover { background: var(--bg); }
+
+.checkbox-row { display: flex; align-items: center; gap: 8px; }
+.checkbox-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--primary); }
+
+/* ── LIST VIEW ── */
+#view-list { min-height: 100vh; }
+.list-header { background: var(--white); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+.list-header h1 { font-size: 16px; font-weight: 700; color: var(--primary); flex: 1; }
+.search-box { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; background: var(--bg); }
+.search-box input { border: none; background: transparent; outline: none; width: 200px; color: var(--text); }
+.list-body { padding: 24px; max-width: 1100px; margin: 0 auto; }
+.list-body h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.dossier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.dossier-card {
+  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; cursor: pointer; transition: box-shadow .2s, border-color .2s;
+}
+.dossier-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); border-color: var(--primary); }
+.dossier-card .ref { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+.dossier-card .meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.dossier-card .actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+.empty-list { text-align: center; padding: 80px 24px; color: var(--muted); }
+.empty-list .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-list h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+
+/* ── DETAIL VIEW ── */
+#view-detail { height: 100vh; display: flex; flex-direction: column; }
+.topbar {
+  height: var(--topbar-h); background: var(--white); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0;
+}
+.topbar .spacer { flex: 1; }
+.topbar .ref-label { font-size: 13px; color: var(--muted); }
+
+.detail-body { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w); background: var(--white); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
+}
+.sidebar-top { padding: 16px; border-bottom: 1px solid var(--border); }
+.sidebar-top h2 { font-size: 14px; font-weight: 700; }
+.sidebar-top .ref { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.sidebar-nav { padding: 8px 0; flex: 1; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 16px; border: none; background: transparent; color: var(--muted);
+  font-size: 13px; font-weight: 500; text-align: left; transition: background .15s, color .15s;
+}
+.nav-item:hover { background: var(--bg); color: var(--text); }
+.nav-item.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.nav-dot { width: 10px; height: 10px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; }
+.nav-dot.done  { background: var(--success); }
+.nav-dot.active { background: var(--primary); }
+
+.sidebar-bottom { padding: 12px 16px; border-top: 1px solid var(--border); }
+.sidebar-bottom .label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.notes-box { background: #fefce8; border: 1px solid #fef08a; border-radius: 6px; padding: 8px; min-height: 70px; }
+.notes-box textarea { border: none; background: transparent; resize: none; width: 100%; outline: none; font-size: 13px; color: #713f12; min-height: 60px; }
+
+/* Main content */
+.main-content { flex: 1; overflow-y: auto; padding: 24px; }
+.section-panel { display: none; max-width: 900px; }
+.section-panel.active { display: block; }
+.section-panel h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+
+.card-section { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.card-section h3 { font-size: 14px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.form-grid { display: grid; gap: 12px; }
+.form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.form-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.full-col { grid-column: 1 / -1; }
+
+/* Intervenants */
+.rdv-block { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.rdv-header { background: var(--bg); padding: 10px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
+.rdv-header .spacer { flex: 1; }
+.participant-header { background: var(--primary); color: #fff; padding: 8px 14px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.participant-row { display: grid; grid-template-columns: 1fr 1fr 80px 80px 32px; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.participant-row:first-of-type { border-top: none; }
+.col-header { padding: 6px 14px; display: grid; grid-template-columns: 1fr 1fr 80px 80px 32px; gap: 10px; }
+.col-header span { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+
+/* Dommages */
+.category-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
+.cat-tab { padding: 8px 16px; border: none; background: none; color: var(--muted); font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; }
+.cat-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.cat-panel { display: none; }
+.cat-panel.active { display: block; }
+.damage-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.damage-table th { padding: 8px 10px; background: var(--bg); font-weight: 600; color: var(--muted); text-align: left; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.damage-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.damage-table td input { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; width: 100%; }
+.damage-table td input:focus { border-color: var(--primary); outline: none; }
+.damage-total { display: flex; gap: 16px; padding: 12px; background: var(--bg); border-radius: var(--radius); margin-top: 12px; font-size: 13px; }
+.damage-total .t-item { display: flex; gap: 6px; }
+.damage-total .t-label { color: var(--muted); }
+.damage-total .t-val { font-weight: 700; }
+
+/* Indemnisation */
+.indemnisation-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.indemnisation-table th { padding: 8px 12px; background: var(--bg); font-weight: 600; color: var(--muted); text-align: left; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.indemnisation-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.indemnisation-table tr.total-row td { font-weight: 700; color: var(--primary); background: #f5f3ff; }
+.indemnisation-table tr.sub-row td:first-child { padding-left: 24px; color: var(--muted); }
+
+/* Conclusion */
+.convention-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+.conv-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--white); color: var(--muted); font-size: 13px; font-weight: 500; transition: all .15s; }
+.conv-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ── TRANSCRIPTION PANEL ── */
+#mic-btn {
+  position: fixed; bottom: 24px; right: 24px;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--primary); color: #fff; border: none;
+  font-size: 22px; box-shadow: 0 4px 12px rgba(79,70,229,.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, transform .1s; z-index: 100;
+}
+#mic-btn:hover { background: var(--primary-dark); transform: scale(1.05); }
+#mic-btn.recording { background: var(--danger); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.4); } 50% { box-shadow: 0 0 0 12px rgba(239,68,68,0); } }
+
+#transcription-panel {
+  position: fixed; bottom: 88px; right: 24px;
+  width: 380px; background: var(--white); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.12);
+  z-index: 99; display: none; flex-direction: column; max-height: 480px;
+}
+#transcription-panel.open { display: flex; }
+.tp-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.tp-header h3 { font-size: 14px; font-weight: 700; flex: 1; }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+.rec-dot.active { background: var(--danger); animation: blink 1s infinite; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+.tp-body { padding: 12px 16px; flex: 1; overflow-y: auto; }
+.tp-transcript { font-size: 13px; color: var(--text); line-height: 1.6; min-height: 80px; white-space: pre-wrap; }
+.tp-interim { color: var(--muted-light); font-style: italic; }
+.tp-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-direction: column; }
+.tp-extract-info { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── TOAST ── */
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; }
+#toast.show { opacity: 1; }
+
+@media (max-width: 700px) {
+  .form-grid.cols-2, .form-grid.cols-3, .form-grid.cols-4 { grid-template-columns: 1fr; }
+  #transcription-panel { width: calc(100vw - 48px); right: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     VIEW: LISTE DES DOSSIERS
+══════════════════════════════════════════════ -->
+<div id="view-list">
+  <div class="list-header">
+    <h1>🛡️ IVF — Rapports d'expertise</h1>
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="searchInput" placeholder="Rechercher un dossier…" oninput="filterDossiers()" />
+    </div>
+    <button class="btn btn-primary" onclick="createDossier()">+ Nouveau dossier</button>
+  </div>
+  <div class="list-body">
+    <h2>Dossiers</h2>
+    <div id="dossierGrid" class="dossier-grid"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     VIEW: DETAIL DU DOSSIER
+══════════════════════════════════════════════ -->
+<div id="view-detail" class="hidden">
+  <!-- Top bar -->
+  <div class="topbar">
+    <button class="btn btn-ghost btn-sm" onclick="showList()">← Retour au dossier</button>
+    <span class="ref-label" id="topbarRef"></span>
+    <div class="spacer"></div>
+    <button class="btn btn-primary btn-sm" onclick="nextSection()" id="btnContinue">Continuer →</button>
+  </div>
+
+  <div class="detail-body">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <h2>Rapport d'expertise</h2>
+        <div class="ref" id="sidebarRef"></div>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-section="intervenants" onclick="gotoSection('intervenants')">
+          <span class="nav-dot active" id="dot-intervenants"></span> Intervenants
+        </button>
+        <button class="nav-item" data-section="contrat" onclick="gotoSection('contrat')">
+          <span class="nav-dot" id="dot-contrat"></span> Vérification du contrat
+        </button>
+        <button class="nav-item" data-section="sinistre" onclick="gotoSection('sinistre')">
+          <span class="nav-dot" id="dot-sinistre"></span> Sinistre
+        </button>
+        <button class="nav-item" data-section="dommages" onclick="gotoSection('dommages')">
+          <span class="nav-dot" id="dot-dommages"></span> Dommages
+        </button>
+        <button class="nav-item" data-section="indemnisation" onclick="gotoSection('indemnisation')">
+          <span class="nav-dot" id="dot-indemnisation"></span> Indemnisation
+        </button>
+        <button class="nav-item" data-section="conclusion" onclick="gotoSection('conclusion')">
+          <span class="nav-dot" id="dot-conclusion"></span> Conclusion
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="label">Statut</div>
+        <select id="sidebarStatut" onchange="updateStatut(this.value)" style="margin-bottom:12px; width:100%; padding:6px; border:1px solid var(--border); border-radius:6px; background:var(--white);">
+          <option value="À traiter">À traiter</option>
+          <option value="En cours">En cours</option>
+          <option value="Clôturé">Clôturé</option>
+        </select>
+        <div class="label">Notes</div>
+        <div class="notes-box">
+          <textarea id="notesField" placeholder="Ajouter une note…" oninput="debounceSave()"></textarea>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="main-content">
+
+      <!-- ── SECTION: INTERVENANTS ── -->
+      <div class="section-panel active" id="section-intervenants">
+        <h2>Intervenants</h2>
+        <div class="card-section" style="border-color:#c7d2fe;background:#f5f3ff;margin-bottom:16px;padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">🎙️</span>
+            <span style="font-size:13px;color:var(--primary);font-weight:600">Dictée — nommez l'assuré, sa qualité (propriétaire / locataire…) et l'heure du RDV</span>
+          </div>
+        </div>
+        <div id="rdvList"></div>
+        <button class="btn btn-ghost" onclick="addRDV()">+ Ajouter un rendez-vous</button>
+      </div>
+
+      <!-- ── SECTION: VÉRIFICATION DU CONTRAT ── -->
+      <div class="section-panel" id="section-contrat">
+        <h2>Vérification du contrat</h2>
+        <div class="card-section" style="border-color:#c7d2fe;background:#f5f3ff;margin-bottom:16px;padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">🎙️</span>
+            <span style="font-size:13px;color:var(--primary);font-weight:600">Dictée — décrivez le risque, mentionnez "conforme" / "non conforme" ou "professionnel"</span>
+          </div>
+        </div>
+        <div class="card-section">
+          <div class="toggle-group" style="margin-bottom:16px">
+            <button id="tgl-particulier" class="active" onclick="setContratType('Particulier')">Particulier</button>
+            <button id="tgl-professionnel" onclick="setContratType('Professionnel')">Professionnel</button>
+          </div>
+          <div class="field" style="margin-bottom:12px">
+            <label>Description du risque</label>
+            <textarea id="f-desc-risque" rows="4" placeholder="Description…" oninput="debounceSave()"></textarea>
+          </div>
+          <div class="field" style="margin-bottom:8px"><label>Conformité du risque</label></div>
+          <div class="toggle-group" style="margin-bottom:12px; width:fit-content">
+            <button id="tgl-oui" onclick="setConformite('Oui')">Oui</button>
+            <button id="tgl-non" onclick="setConformite('Non')">Non</button>
+            <button id="tgl-nv" class="active" onclick="setConformite('Non vérifié')">Non vérifié</button>
+          </div>
+          <div class="field">
+            <label>Description de la conformité</label>
+            <textarea id="f-conf-desc" rows="3" placeholder="Description…" oninput="debounceSave()"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: SINISTRE ── -->
+      <div class="section-panel" id="section-sinistre">
+        <h2>Sinistre</h2>
+        <div class="card-section" style="border-color:#c7d2fe; background:#f5f3ff; margin-bottom:16px">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px">
+            <span style="font-size:16px">🎙️</span>
+            <span style="font-size:13px; color:var(--primary); font-weight:600">Transcription en direct — appuyez sur le micro pour démarrer</span>
+          </div>
+          <p style="font-size:12px; color:var(--muted)">Pendant la visio avec l'assuré, le formulaire se remplira automatiquement à la volée.</p>
+        </div>
+        <div class="card-section">
+          <div style="font-size:12px; color:var(--primary); font-weight:600; margin-bottom:16px">📋 Champs indispensables dans le cadre d'un procès-verbal contradictoire</div>
+          <div class="form-grid cols-2" style="margin-bottom:12px">
+            <div class="field">
+              <label>Date du sinistre</label>
+              <input type="date" id="f-date-sinistre" oninput="debounceSave()" />
+            </div>
+            <div class="field">
+              <label>Type de sinistre</label>
+              <select id="f-type-sinistre" onchange="debounceSave()">
+                <option value="">— Sélectionner —</option>
+                <option value="Dégât des eaux">Dégât des eaux</option>
+                <option value="Incendie">Incendie</option>
+                <option value="Vol">Vol</option>
+                <option value="Bris de glace">Bris de glace</option>
+                <option value="Autre">Autre</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Localisation</label>
+              <input type="text" id="f-localisation" placeholder="Pièce ou adresse…" oninput="debounceSave()" />
+            </div>
+            <div class="field">
+              <label>Tiers impliqué</label>
+              <div class="toggle-group">
+                <button id="tgl-tiers-oui" onclick="setTiers(true)">Oui</button>
+                <button id="tgl-tiers-non" class="active" onclick="setTiers(false)">Non</button>
+              </div>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:12px">
+            <label>Circonstances</label>
+            <textarea id="f-circonstances" rows="4" placeholder="Description des circonstances…" oninput="debounceSave()"></textarea>
+          </div>
+          <div class="field" style="margin-bottom:12px">
+            <label>Causes</label>
+            <textarea id="f-causes" rows="3" placeholder="Causes du sinistre…" oninput="debounceSave()"></textarea>
+          </div>
+          <div class="field">
+            <label>Dommages constatés</label>
+            <textarea id="f-dommages-desc" rows="3" placeholder="Description des dommages…" oninput="debounceSave()"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: DOMMAGES ── -->
+      <div class="section-panel" id="section-dommages">
+        <h2>Chiffrage des dommages</h2>
+        <div class="card-section" style="border-color:#c7d2fe;background:#f5f3ff;margin-bottom:16px;padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">🎙️</span>
+            <span style="font-size:13px;color:var(--primary);font-weight:600">Dictée — décrivez les dommages avec leur montant (ex : "parquet estimé à 500 €")</span>
+          </div>
+        </div>
+        <div class="card-section">
+          <div class="category-tabs">
+            <button class="cat-tab active" onclick="showCat('immobilier', this)">Immobilier <span id="badge-immobilier" class="badge badge-blue" style="margin-left:4px"></span></button>
+            <button class="cat-tab" onclick="showCat('embellissement', this)">Embellissement</button>
+            <button class="cat-tab" onclick="showCat('mobilier', this)">Mobilier</button>
+            <button class="cat-tab" onclick="showCat('autres', this)">Autres</button>
+          </div>
+          <div id="cat-immobilier" class="cat-panel active"></div>
+          <div id="cat-embellissement" class="cat-panel"></div>
+          <div id="cat-mobilier" class="cat-panel"></div>
+          <div id="cat-autres" class="cat-panel"></div>
+        </div>
+        <div class="damage-total" id="dmg-totals">
+          <div class="t-item"><span class="t-label">Total H.T :</span><span class="t-val" id="total-ht">0,00 €</span></div>
+          <div class="t-item"><span class="t-label">Total T.T.C :</span><span class="t-val" id="total-ttc">0,00 €</span></div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: INDEMNISATION ── -->
+      <div class="section-panel" id="section-indemnisation">
+        <h2>Indemnisation</h2>
+        <div class="card-section">
+          <div id="indemnisation-content">
+            <p style="color:var(--muted); font-size:13px">Complétez d'abord la section Dommages pour calculer l'indemnisation.</p>
+          </div>
+          <div style="margin-top:16px; display:flex; align-items:center; gap:12px">
+            <div class="field" style="flex:0 0 auto">
+              <label>Franchise</label>
+              <input type="number" id="f-franchise" value="0" min="0" step="0.01" style="width:140px" oninput="debounceSave(); computeIndemnisation()" />
+            </div>
+            <div class="field" style="flex:0 0 auto">
+              <label>Franchise déduite</label>
+              <div id="franchise-deduite" style="padding:8px 10px; font-weight:600; color:var(--primary)">0,00 €</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: CONCLUSION ── -->
+      <div class="section-panel" id="section-conclusion">
+        <h2>Conclusion</h2>
+        <div class="card-section" style="border-color:#c7d2fe;background:#f5f3ff;margin-bottom:16px;padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">🎙️</span>
+            <span style="font-size:13px;color:var(--primary);font-weight:600">Dictée — mentionnez la convention (IRSI T1/T2, CIDE-COP…), la garantie et la conclusion</span>
+          </div>
+        </div>
+        <div class="card-section">
+          <div class="field" style="margin-bottom:16px">
+            <label>Responsabilités</label>
+            <textarea id="f-responsabilites" rows="4" placeholder="Description des responsabilités…" oninput="debounceSave()"></textarea>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>Recours — Actions en remboursement</label>
+            <div id="recoursList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px"></div>
+            <button class="btn btn-ghost btn-sm" onclick="addRecours()">+ Ajouter un recours</button>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>Convention applicable</label>
+            <div class="convention-group">
+              <button class="conv-btn" onclick="setConvention('CIDE-COP')">CIDE-COP</button>
+              <button class="conv-btn" onclick="setConvention('CIPIEC')">CIPIEC</button>
+              <button class="conv-btn" onclick="setConvention('Cumul Ass.')">Cumul Ass.</button>
+              <button class="conv-btn" onclick="setConvention('IRSI T1')">IRSI T1</button>
+              <button class="conv-btn" onclick="setConvention('IRSI T2')">IRSI T2</button>
+              <button class="conv-btn" onclick="setConvention('Autre')">Autre</button>
+              <button class="conv-btn" onclick="setConvention('Sans objet')">Sans objet</button>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:12px">
+            <label>Garantie acquise</label>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:4px">
+              <div class="toggle-group">
+                <button id="tgl-gar-oui" onclick="setGarantie('Oui')">Oui</button>
+                <button id="tgl-gar-non" class="active" onclick="setGarantie('Non')">Non</button>
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="f-avec-reserve" onchange="debounceSave()" />
+                <label for="f-avec-reserve">Avec réserve</label>
+              </div>
+            </div>
+          </div>
+          <div class="form-grid cols-2" style="margin-bottom:12px">
+            <div class="field">
+              <label>Garantie applicable</label>
+              <select id="f-garantie-applicable" onchange="debounceSave()">
+                <option value="">— Sélectionner —</option>
+                <option value="Dégât des eaux">Dégât des eaux</option>
+                <option value="Incendie">Incendie</option>
+                <option value="Vol">Vol</option>
+                <option value="Bris de glace">Bris de glace</option>
+                <option value="Responsabilité civile">Responsabilité civile</option>
+                <option value="Autre">Autre</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Bénéficiaire</label>
+              <input type="text" id="f-beneficiaire" placeholder="Nom du bénéficiaire…" oninput="debounceSave()" />
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>Description</label>
+            <textarea id="f-garantie-desc" rows="3" placeholder="Description…" oninput="debounceSave()"></textarea>
+          </div>
+          <div style="background:var(--bg); border-radius:8px; padding:16px">
+            <div style="font-size:13px; font-weight:700; margin-bottom:10px">Conclusion de l'expert</div>
+            <div class="field">
+              <textarea id="f-conclusion-expert" rows="5" placeholder="Conclusion de l'expert…" oninput="debounceSave()"></textarea>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:16px">
+          <button class="btn btn-primary" onclick="toast('📄 Rapport généré (fonctionnalité à venir)')">📄 Générer le rapport</button>
+        </div>
+      </div>
+
+    </div><!-- /main-content -->
+  </div><!-- /detail-body -->
+</div><!-- /view-detail -->
+
+<!-- Floating mic button -->
+<button id="mic-btn" class="hidden" onclick="toggleTranscription()" title="Lancer la transcription">🎙️</button>
+
+<!-- Transcription panel -->
+<div id="transcription-panel">
+  <div class="tp-header">
+    <span class="rec-dot" id="recDot"></span>
+    <h3>Transcription</h3>
+    <span id="tpSectionBadge" style="font-size:11px;padding:2px 8px;background:var(--primary-light);color:var(--primary);border-radius:99px;font-weight:600;white-space:nowrap;flex-shrink:0">Intervenants</span>
+    <button class="btn btn-sm" id="tpToggleBtn" onclick="toggleRecognition()">▶ Démarrer</button>
+    <button class="btn btn-ghost btn-sm" onclick="closeTranscription()">✕</button>
+  </div>
+  <div class="tp-body">
+    <div class="tp-transcript" id="tpTranscript">
+      <span style="color:var(--muted-light)">La transcription apparaîtra ici…</span>
+    </div>
+  </div>
+  <div class="tp-footer">
+    <div class="tp-extract-info" id="tpExtractInfo">
+      <span>Extraction NLP automatique toutes les 3 secondes</span>
+    </div>
+    <div style="display:flex; gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="clearTranscript()">Effacer</button>
+      <button class="btn btn-primary btn-sm" onclick="extractNow()">Extraire maintenant</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+const API = '/api/v1';
+const SECTIONS = ['intervenants','contrat','sinistre','dommages','indemnisation','conclusion'];
+const CATEGORIES = ['immobilier','embellissement','mobilier','autres'];
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let state = {
+  dossiers: [],
+  current: null,       // dossier object
+  section: 'intervenants',
+  saveTimer: null,
+  recognition: null,
+  transcribing: false,
+  transcript: '',
+  extractTimer: null,
+};
+
+// ── API ──────────────────────────────────────────────────────────────────────
+const api = {
+  async get(path) { const r = await fetch(API + path); return r.json(); },
+  async post(path, body) {
+    const r = await fetch(API + path, { method: 'POST', headers: body ? {'Content-Type':'application/json'} : {}, body: body ? JSON.stringify(body) : undefined });
+    return r.json();
+  },
+  async put(path, body) {
+    const r = await fetch(API + path, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    return r.json();
+  },
+  async delete(path) { await fetch(API + path, { method: 'DELETE' }); },
+};
+
+// ── LIST VIEW ─────────────────────────────────────────────────────────────────
+async function loadDossiers() {
+  state.dossiers = await api.get('/dossiers');
+  renderList();
+}
+
+function filterDossiers() {
+  renderList(document.getElementById('searchInput').value.toLowerCase());
+}
+
+function renderList(filter = '') {
+  const grid = document.getElementById('dossierGrid');
+  const filtered = state.dossiers.filter(d =>
+    d.reference.toLowerCase().includes(filter) ||
+    d.statut.toLowerCase().includes(filter)
+  );
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="empty-list" style="grid-column:1/-1">
+      <div class="icon">📂</div>
+      <h3>${filter ? 'Aucun résultat' : 'Aucun dossier'}</h3>
+      <p>${filter ? 'Essayez un autre terme.' : 'Créez votre premier dossier.'}</p>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = filtered.map(d => `
+    <div class="dossier-card" onclick="openDossier('${d.id}')">
+      <div class="ref">📋 ${d.reference}</div>
+      ${statutBadge(d.statut)}
+      <div class="meta">Créé le ${formatDate(d.created_at)}<br>Modifié le ${formatDate(d.updated_at)}</div>
+      <div class="actions" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm" onclick="deleteDossier('${d.id}')">🗑️ Supprimer</button>
+        <button class="btn btn-primary btn-sm" onclick="openDossier('${d.id}')">Ouvrir →</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function statutBadge(s) {
+  const map = {'À traiter':'badge-gray','En cours':'badge-blue','Clôturé':'badge-green'};
+  return `<span class="badge ${map[s]||'badge-gray'}">${s}</span>`;
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
+async function createDossier() {
+  const d = await api.post('/dossiers');
+  await loadDossiers();
+  openDossier(d.id);
+}
+
+async function deleteDossier(id) {
+  if (!confirm('Supprimer ce dossier ?')) return;
+  await api.delete(`/dossiers/${id}`);
+  await loadDossiers();
+}
+
+// ── DETAIL VIEW ───────────────────────────────────────────────────────────────
+async function openDossier(id) {
+  const d = await api.get(`/dossiers/${id}`);
+  state.current = d;
+  state.section = 'intervenants';
+  showView('detail');
+  renderDetail();
+}
+
+function showList() {
+  showView('list');
+  document.getElementById('mic-btn').classList.add('hidden');
+  closeTranscription();
+  loadDossiers();
+}
+
+function showView(v) {
+  document.getElementById('view-list').classList.toggle('hidden', v !== 'list');
+  document.getElementById('view-detail').classList.toggle('hidden', v !== 'detail');
+}
+
+function renderDetail() {
+  const d = state.current;
+  const data = d.data || {};
+
+  document.getElementById('topbarRef').textContent = d.reference;
+  document.getElementById('sidebarRef').textContent = d.reference;
+  document.getElementById('sidebarStatut').value = d.statut;
+
+  // Notes
+  document.getElementById('notesField').value = data.notes || '';
+
+  gotoSection(state.section);
+  renderIntervenants();
+  loadContrat();
+  loadSinistre();
+  renderDommages();
+  computeIndemnisation();
+  loadConclusion();
+  document.getElementById('mic-btn').classList.remove('hidden');
+}
+
+function gotoSection(s) {
+  state.section = s;
+  SECTIONS.forEach(id => {
+    document.getElementById(`section-${id}`).classList.toggle('active', id === s);
+    document.querySelector(`[data-section="${id}"]`).classList.toggle('active', id === s);
+  });
+  updateDots();
+  document.getElementById('btnContinue').textContent = s === 'conclusion' ? '📄 Générer' : 'Continuer →';
+  if (s === 'indemnisation') computeIndemnisation();
+  updateTpSectionBadge();
+}
+
+function nextSection() {
+  const idx = SECTIONS.indexOf(state.section);
+  if (idx < SECTIONS.length - 1) gotoSection(SECTIONS[idx + 1]);
+  else toast('📄 Rapport généré (fonctionnalité à venir)');
+}
+
+function updateDots() {
+  const d = state.current?.data || {};
+  const progress = {
+    intervenants:  (d.rdv?.length || 0) > 0,
+    contrat:       !!(d.contrat?.description_risque),
+    sinistre:      !!(d.sinistre?.circonstances || d.sinistre?.date),
+    dommages:      CATEGORIES.some(c => (d.dommages?.categories?.[c]?.length || 0) > 0),
+    indemnisation: true,
+    conclusion:    !!(d.conclusion?.conclusion_expert),
+  };
+  SECTIONS.forEach(s => {
+    const dot = document.getElementById(`dot-${s}`);
+    dot.className = 'nav-dot' + (s === state.section ? ' active' : progress[s] ? ' done' : '');
+  });
+}
+
+// ── SAVE ─────────────────────────────────────────────────────────────────────
+function debounceSave() {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(save, 800);
+}
+
+async function save() {
+  if (!state.current) return;
+  const data = collectData();
+  const updated = await api.put(`/dossiers/${state.current.id}`, {
+    statut: document.getElementById('sidebarStatut').value,
+    data,
+  });
+  state.current = updated;
+  updateDots();
+}
+
+async function updateStatut(val) {
+  if (!state.current) return;
+  state.current = await api.put(`/dossiers/${state.current.id}`, { statut: val });
+  updateDots();
+  toast('Statut mis à jour');
+}
+
+function collectData() {
+  const d = state.current?.data || {};
+  return {
+    notes: document.getElementById('notesField').value,
+    rdv: d.rdv || [],
+    contrat: {
+      type:                  d.contrat?.type || 'Particulier',
+      description_risque:    document.getElementById('f-desc-risque').value,
+      conformite:            d.contrat?.conformite || 'Non vérifié',
+      conformite_description: document.getElementById('f-conf-desc').value,
+    },
+    sinistre: {
+      date:          document.getElementById('f-date-sinistre').value,
+      type:          document.getElementById('f-type-sinistre').value,
+      localisation:  document.getElementById('f-localisation').value,
+      tiers_implique: d.sinistre?.tiers_implique || false,
+      circonstances: document.getElementById('f-circonstances').value,
+      causes:        document.getElementById('f-causes').value,
+      dommages_desc: document.getElementById('f-dommages-desc').value,
+      transcription: state.transcript,
+    },
+    dommages: {
+      categories: d.dommages?.categories || { immobilier:[], embellissement:[], mobilier:[], autres:[] },
+    },
+    indemnisation: {
+      franchise: parseFloat(document.getElementById('f-franchise').value || 0),
+    },
+    conclusion: {
+      responsabilites:     document.getElementById('f-responsabilites').value,
+      recours:             d.conclusion?.recours || [],
+      convention:          d.conclusion?.convention || '',
+      garantie_acquise:    d.conclusion?.garantie_acquise || 'Non',
+      avec_reserve:        document.getElementById('f-avec-reserve').checked,
+      garantie_applicable: document.getElementById('f-garantie-applicable').value,
+      beneficiaire:        document.getElementById('f-beneficiaire').value,
+      garantie_description: document.getElementById('f-garantie-desc').value,
+      conclusion_expert:   document.getElementById('f-conclusion-expert').value,
+    },
+  };
+}
+
+// ── INTERVENANTS ──────────────────────────────────────────────────────────────
+function renderIntervenants() {
+  const rdvs = state.current?.data?.rdv || [];
+  const container = document.getElementById('rdvList');
+  container.innerHTML = rdvs.length === 0
+    ? '<p style="color:var(--muted);font-size:13px;margin-bottom:12px">Aucun rendez-vous. Ajoutez-en un ci-dessous.</p>'
+    : rdvs.map((rdv, ri) => `
+      <div class="rdv-block">
+        <div class="rdv-header">
+          <input type="date" value="${rdv.date||''}" onchange="updateRdv(${ri},'date',this.value)" style="border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:13px" />
+          <input type="time" value="${rdv.heure_debut||''}" onchange="updateRdv(${ri},'heure_debut',this.value)" style="border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:13px" />
+          <span>→</span>
+          <input type="time" value="${rdv.heure_fin||''}" onchange="updateRdv(${ri},'heure_fin',this.value)" style="border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:13px" />
+          <div class="spacer"></div>
+          <button class="btn btn-sm" style="color:var(--danger);background:transparent;border:none" onclick="addTiers(${ri})">+ Ajouter un tiers</button>
+          <button class="btn btn-ghost btn-sm" onclick="removeRdv(${ri})">✕</button>
+        </div>
+
+        <!-- Assuré -->
+        <div class="participant-header">👤 Assuré</div>
+        <div class="col-header"><span>Nom</span><span>Qualité</span><span>Convoqué(e)</span><span>Présent(e)</span><span></span></div>
+        <div class="participant-row">
+          <input type="text" value="${rdv.assure?.nom||''}" placeholder="Nom…" onchange="updateAssure(${ri},'nom',this.value)" />
+          <select onchange="updateAssure(${ri},'qualite',this.value)">
+            ${['Propriétaire','Locataire','Copropriétaire','Gérant','Autre'].map(q=>`<option ${rdv.assure?.qualite===q?'selected':''}>${q}</option>`).join('')}
+          </select>
+          <input type="checkbox" ${rdv.assure?.convoque?'checked':''} onchange="updateAssure(${ri},'convoque',this.checked)" />
+          <input type="checkbox" ${rdv.assure?.present?'checked':''} onchange="updateAssure(${ri},'present',this.checked)" />
+          <span></span>
+        </div>
+
+        <!-- Tiers -->
+        ${(rdv.tiers||[]).length > 0 ? `
+          <div class="participant-header" style="background:#64748b">👥 Tiers</div>
+          <div class="col-header"><span>Nom</span><span>Rôle</span><span>Convoqué(e)</span><span>Présent(e)</span><span></span></div>
+          ${(rdv.tiers||[]).map((t, ti) => `
+            <div class="participant-row">
+              <input type="text" value="${t.nom||''}" placeholder="Nom…" onchange="updateTiersRow(${ri},${ti},'nom',this.value)" />
+              <input type="text" value="${t.role||''}" placeholder="Rôle…" onchange="updateTiersRow(${ri},${ti},'role',this.value)" />
+              <input type="checkbox" ${t.convoque?'checked':''} onchange="updateTiersRow(${ri},${ti},'convoque',this.checked)" />
+              <input type="checkbox" ${t.present?'checked':''} onchange="updateTiersRow(${ri},${ti},'present',this.checked)" />
+              <button onclick="removeTiers(${ri},${ti})" style="background:none;border:none;color:var(--danger)">✕</button>
+            </div>
+          `).join('')}
+        ` : ''}
+
+        <div style="padding:8px 14px; border-top:1px dashed var(--border)">
+          <button class="btn btn-ghost btn-sm" onclick="addIntervenant(${ri})">+ Ajouter un intervenant</button>
+        </div>
+      </div>
+    `).join('');
+}
+
+function addRDV() {
+  const data = state.current.data;
+  if (!data.rdv) data.rdv = [];
+  data.rdv.push({ date:'', heure_debut:'', heure_fin:'', assure:{nom:'',qualite:'Propriétaire',convoque:true,present:true}, tiers:[] });
+  renderIntervenants();
+  debounceSave();
+}
+
+function removeRdv(ri) {
+  state.current.data.rdv.splice(ri, 1);
+  renderIntervenants();
+  debounceSave();
+}
+
+function addTiers(ri) { addIntervenant(ri); }
+
+function addIntervenant(ri) {
+  state.current.data.rdv[ri].tiers = state.current.data.rdv[ri].tiers || [];
+  state.current.data.rdv[ri].tiers.push({ nom:'', role:'', convoque:false, present:false });
+  renderIntervenants();
+  debounceSave();
+}
+
+function removeTiers(ri, ti) {
+  state.current.data.rdv[ri].tiers.splice(ti, 1);
+  renderIntervenants();
+  debounceSave();
+}
+
+function updateRdv(ri, key, val) {
+  state.current.data.rdv[ri][key] = val;
+  debounceSave();
+}
+function updateAssure(ri, key, val) {
+  state.current.data.rdv[ri].assure = state.current.data.rdv[ri].assure || {};
+  state.current.data.rdv[ri].assure[key] = val;
+  debounceSave();
+}
+function updateTiersRow(ri, ti, key, val) {
+  state.current.data.rdv[ri].tiers[ti][key] = val;
+  debounceSave();
+}
+
+// ── CONTRAT ───────────────────────────────────────────────────────────────────
+function loadContrat() {
+  const c = state.current?.data?.contrat || {};
+  document.getElementById('f-desc-risque').value = c.description_risque || '';
+  document.getElementById('f-conf-desc').value   = c.conformite_description || '';
+  setContratType(c.type || 'Particulier', false);
+  setConformite(c.conformite || 'Non vérifié', false);
+}
+
+function setContratType(val, save=true) {
+  if (!state.current?.data) return;
+  state.current.data.contrat = state.current.data.contrat || {};
+  state.current.data.contrat.type = val;
+  document.getElementById('tgl-particulier').classList.toggle('active', val==='Particulier');
+  document.getElementById('tgl-professionnel').classList.toggle('active', val==='Professionnel');
+  if (save) debounceSave();
+}
+
+function setConformite(val, save=true) {
+  if (!state.current?.data) return;
+  state.current.data.contrat = state.current.data.contrat || {};
+  state.current.data.contrat.conformite = val;
+  ['oui','non','nv'].forEach(k => document.getElementById(`tgl-${k}`)?.classList.remove('active'));
+  const map = {'Oui':'tgl-oui','Non':'tgl-non','Non vérifié':'tgl-nv'};
+  document.getElementById(map[val])?.classList.add('active');
+  if (save) debounceSave();
+}
+
+// ── SINISTRE ──────────────────────────────────────────────────────────────────
+function loadSinistre() {
+  const s = state.current?.data?.sinistre || {};
+  document.getElementById('f-date-sinistre').value   = s.date || '';
+  document.getElementById('f-type-sinistre').value   = s.type || '';
+  document.getElementById('f-localisation').value    = s.localisation || '';
+  document.getElementById('f-circonstances').value   = s.circonstances || '';
+  document.getElementById('f-causes').value          = s.causes || '';
+  document.getElementById('f-dommages-desc').value   = s.dommages_desc || '';
+  setTiers(s.tiers_implique || false, false);
+}
+
+function setTiers(val, save=true) {
+  if (!state.current?.data) return;
+  state.current.data.sinistre = state.current.data.sinistre || {};
+  state.current.data.sinistre.tiers_implique = val;
+  document.getElementById('tgl-tiers-oui').classList.toggle('active', val===true);
+  document.getElementById('tgl-tiers-non').classList.toggle('active', val===false);
+  if (save) debounceSave();
+}
+
+// ── DOMMAGES ──────────────────────────────────────────────────────────────────
+function renderDommages() {
+  const cats = state.current?.data?.dommages?.categories || {};
+  CATEGORIES.forEach(cat => {
+    const items = cats[cat] || [];
+    renderCategoryPanel(cat, items);
+  });
+  updateDamageTotal();
+}
+
+function renderCategoryPanel(cat, items) {
+  const panel = document.getElementById(`cat-${cat}`);
+  panel.innerHTML = `
+    <table class="damage-table">
+      <thead><tr>
+        <th style="width:40%">Désignation</th><th>Qté</th><th>Unité</th>
+        <th>P.U (H.T)</th><th>V.N</th><th>Vét %</th><th></th>
+      </tr></thead>
+      <tbody>
+      ${items.map((it, i) => `<tr>
+        <td><input value="${esc(it.designation||'')}" onchange="updateItem('${cat}',${i},'designation',this.value)" style="width:100%" /></td>
+        <td><input type="number" value="${it.qte||1}" min="0" style="width:60px" onchange="updateItem('${cat}',${i},'qte',+this.value)" /></td>
+        <td><select onchange="updateItem('${cat}',${i},'unite',this.value)">
+          ${['U','m²','m','forfait'].map(u=>`<option ${it.unite===u?'selected':''}>${u}</option>`).join('')}
+        </select></td>
+        <td><input type="number" value="${it.pu_ht||0}" min="0" step="0.01" style="width:80px" onchange="updateItem('${cat}',${i},'pu_ht',+this.value); updateVN('${cat}',${i})" /></td>
+        <td><input type="number" value="${it.vn||0}" readonly style="width:70px; background:var(--bg)" /></td>
+        <td><input type="number" value="${it.vet||0}" min="0" max="100" style="width:60px" onchange="updateItem('${cat}',${i},'vet',+this.value)" /></td>
+        <td><button onclick="removeItem('${cat}',${i})" style="border:none;background:none;color:var(--danger)">✕</button></td>
+      </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:8px">
+      <button class="btn btn-ghost btn-sm" onclick="addItem('${cat}')">+ Ajouter un dommage</button>
+    </div>
+  `;
+  const badge = document.getElementById(`badge-${cat}`);
+  if (badge) badge.textContent = items.length > 0 ? `${items.length * 30} €` : '';
+}
+
+function showCat(cat, btn) {
+  CATEGORIES.forEach(c => {
+    document.getElementById(`cat-${c}`)?.classList.toggle('active', c===cat);
+  });
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function getCategories() {
+  if (!state.current.data.dommages) state.current.data.dommages = { categories: {} };
+  if (!state.current.data.dommages.categories) state.current.data.dommages.categories = {};
+  return state.current.data.dommages.categories;
+}
+
+function addItem(cat) {
+  const cats = getCategories();
+  if (!cats[cat]) cats[cat] = [];
+  cats[cat].push({ designation:'', qte:1, unite:'U', pu_ht:0, vn:0, vet:0 });
+  renderCategoryPanel(cat, cats[cat]);
+  updateDamageTotal();
+  debounceSave();
+}
+
+function removeItem(cat, i) {
+  getCategories()[cat].splice(i, 1);
+  renderCategoryPanel(cat, getCategories()[cat]);
+  updateDamageTotal();
+  debounceSave();
+}
+
+function updateItem(cat, i, key, val) {
+  getCategories()[cat][i][key] = val;
+  if (key === 'pu_ht' || key === 'qte') {
+    const it = getCategories()[cat][i];
+    it.vn = it.qte * it.pu_ht;
+  }
+  updateDamageTotal();
+  debounceSave();
+}
+
+function updateVN(cat, i) {
+  const it = getCategories()[cat][i];
+  it.vn = (it.qte||0) * (it.pu_ht||0);
+  renderCategoryPanel(cat, getCategories()[cat]);
+}
+
+function updateDamageTotal() {
+  const cats = getCategories();
+  let totalHT = 0;
+  CATEGORIES.forEach(cat => {
+    (cats[cat]||[]).forEach(it => { totalHT += (it.qte||0) * (it.pu_ht||0); });
+  });
+  const ttc = totalHT * 1.10;
+  document.getElementById('total-ht').textContent  = fmtEur(totalHT);
+  document.getElementById('total-ttc').textContent = fmtEur(ttc);
+  return totalHT;
+}
+
+// ── INDEMNISATION ─────────────────────────────────────────────────────────────
+function computeIndemnisation() {
+  const cats = getCategories();
+  const franchise = parseFloat(document.getElementById('f-franchise')?.value || 0);
+  let totalHT = 0;
+  const byCategorie = {};
+  CATEGORIES.forEach(cat => {
+    let sub = 0;
+    (cats[cat]||[]).forEach(it => { sub += (it.qte||0) * (it.pu_ht||0); });
+    byCategorie[cat] = sub;
+    totalHT += sub;
+  });
+
+  const immediate = Math.max(0, totalHT - franchise);
+  document.getElementById('franchise-deduite').textContent = fmtEur(immediate);
+
+  const catLabels = { immobilier:'Immobilier', embellissement:'Embellissement', mobilier:'Mobilier', autres:'Autres' };
+  const rows = CATEGORIES.map(cat => `
+    <tr>
+      <td>${catLabels[cat]}</td>
+      <td>${fmtEur(byCategorie[cat])}</td>
+      <td>${fmtEur(byCategorie[cat])}</td>
+      <td>0,00 €</td>
+      <td>0,00 €</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('indemnisation-content').innerHTML = `
+    <table class="indemnisation-table">
+      <thead><tr>
+        <th>Chiffrages</th><th>V.N (H.T)</th><th>Immédiate</th><th>Différée s/justif.</th><th>Découvert</th>
+      </tr></thead>
+      <tbody>
+        ${rows}
+        <tr class="total-row">
+          <td>Totaux</td><td>${fmtEur(totalHT)}</td><td>${fmtEur(immediate)}</td><td>0,00 €</td><td>0,00 €</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
+// ── CONCLUSION ────────────────────────────────────────────────────────────────
+function loadConclusion() {
+  const c = state.current?.data?.conclusion || {};
+  document.getElementById('f-responsabilites').value    = c.responsabilites || '';
+  document.getElementById('f-garantie-applicable').value = c.garantie_applicable || '';
+  document.getElementById('f-beneficiaire').value        = c.beneficiaire || '';
+  document.getElementById('f-garantie-desc').value       = c.garantie_description || '';
+  document.getElementById('f-conclusion-expert').value   = c.conclusion_expert || '';
+  document.getElementById('f-avec-reserve').checked      = c.avec_reserve || false;
+  setGarantie(c.garantie_acquise || 'Non', false);
+  if (c.convention) setConvention(c.convention, false);
+  renderRecours(c.recours || []);
+}
+
+function setConvention(val, save=true) {
+  if (!state.current?.data) return;
+  state.current.data.conclusion = state.current.data.conclusion || {};
+  state.current.data.conclusion.convention = val;
+  document.querySelectorAll('.conv-btn').forEach(b => b.classList.toggle('active', b.textContent === val));
+  if (save) debounceSave();
+}
+
+function setGarantie(val, save=true) {
+  if (!state.current?.data) return;
+  state.current.data.conclusion = state.current.data.conclusion || {};
+  state.current.data.conclusion.garantie_acquise = val;
+  document.getElementById('tgl-gar-oui').classList.toggle('active', val==='Oui');
+  document.getElementById('tgl-gar-non').classList.toggle('active', val==='Non');
+  if (save) debounceSave();
+}
+
+function renderRecours(list) {
+  document.getElementById('recoursList').innerHTML = list.map((r, i) => `
+    <div style="display:flex; gap:6px; align-items:center">
+      <input type="text" value="${esc(r)}" onchange="updateRecours(${i},this.value)"
+        style="flex:1; border:1px solid var(--border); border-radius:6px; padding:6px 10px" />
+      <button onclick="removeRecours(${i})" style="border:none;background:none;color:var(--danger)">✕</button>
+    </div>
+  `).join('');
+}
+
+function addRecours() {
+  const c = state.current.data.conclusion = state.current.data.conclusion || {};
+  c.recours = c.recours || [];
+  c.recours.push('');
+  renderRecours(c.recours);
+  debounceSave();
+}
+
+function removeRecours(i) {
+  state.current.data.conclusion.recours.splice(i, 1);
+  renderRecours(state.current.data.conclusion.recours);
+  debounceSave();
+}
+
+function updateRecours(i, val) {
+  state.current.data.conclusion.recours[i] = val;
+  debounceSave();
+}
+
+// ── TRANSCRIPTION (Web Speech API) ───────────────────────────────────────────
+let finalTranscript = '';
+let interimTranscript = '';
+
+function toggleTranscription() {
+  const panel = document.getElementById('transcription-panel');
+  panel.classList.toggle('open');
+}
+
+function closeTranscription() {
+  document.getElementById('transcription-panel').classList.remove('open');
+  stopRecognition();
+}
+
+function toggleRecognition() {
+  if (state.transcribing) stopRecognition();
+  else startRecognition();
+}
+
+function startRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    toast('⚠️ Web Speech API non disponible — utilisez Chrome ou Edge');
+    return;
+  }
+  state.recognition = new SR();
+  state.recognition.lang = 'fr-FR';
+  state.recognition.continuous = true;
+  state.recognition.interimResults = true;
+
+  state.recognition.onresult = (e) => {
+    interimTranscript = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
+      else interimTranscript += e.results[i][0].transcript;
+    }
+    state.transcript = finalTranscript;
+    renderTranscript();
+    scheduleExtract();
+  };
+
+  state.recognition.onerror = (e) => {
+    if (e.error !== 'aborted') toast(`Erreur microphone : ${e.error}`);
+  };
+
+  state.recognition.onend = () => {
+    if (state.transcribing) state.recognition.start(); // auto-restart
+  };
+
+  state.recognition.start();
+  state.transcribing = true;
+  document.getElementById('tpToggleBtn').textContent = '⏹ Arrêter';
+  document.getElementById('recDot').classList.add('active');
+  document.getElementById('mic-btn').classList.add('recording');
+  document.getElementById('mic-btn').textContent = '⏹';
+}
+
+function stopRecognition() {
+  if (state.recognition) { state.recognition.onend = null; state.recognition.stop(); state.recognition = null; }
+  state.transcribing = false;
+  clearTimeout(state.extractTimer);
+  document.getElementById('tpToggleBtn').textContent = '▶ Démarrer';
+  document.getElementById('recDot').classList.remove('active');
+  document.getElementById('mic-btn').classList.remove('recording');
+  document.getElementById('mic-btn').textContent = '🎙️';
+}
+
+function renderTranscript() {
+  document.getElementById('tpTranscript').innerHTML =
+    (finalTranscript || '') +
+    (interimTranscript ? `<span class="tp-interim">${interimTranscript}</span>` : '');
+}
+
+function clearTranscript() {
+  finalTranscript = ''; interimTranscript = ''; state.transcript = '';
+  renderTranscript();
+}
+
+function scheduleExtract() {
+  clearTimeout(state.extractTimer);
+  state.extractTimer = setTimeout(extractNow, 3000);
+}
+
+async function extractNow() {
+  const text = (finalTranscript + interimTranscript).trim();
+  if (!text) return;
+
+  const info = document.getElementById('tpExtractInfo');
+  info.innerHTML = '<span class="spinner"></span> Extraction en cours…';
+
+  try {
+    // ── API: champs Sinistre (date, type, localisation, tiers, description) ──
+    const fd = new FormData();
+    fd.append('text', text);
+    const r = await fetch(`${API}/extract-text`, { method:'POST', body: fd });
+    const d = await r.json();
+
+    let applied = 0;
+    const sectionsApplied = new Set();
+
+    // Champs Sinistre (API) — appliqués uniquement sur la section Sinistre
+    if (state.section === 'sinistre') {
+      if (d.date_sinistre) { setFieldHighlight('f-date-sinistre', d.date_sinistre); applied++; sectionsApplied.add('Sinistre'); }
+      if (d.type_sinistre) { setFieldHighlight('f-type-sinistre', d.type_sinistre); applied++; sectionsApplied.add('Sinistre'); }
+      if (d.localisation)  { setFieldHighlight('f-localisation', d.localisation); applied++; sectionsApplied.add('Sinistre'); }
+      if (d.description_courte) { setFieldHighlight('f-circonstances', d.description_courte); applied++; sectionsApplied.add('Sinistre'); }
+      if (d.tiers_implique !== null && d.tiers_implique !== undefined) {
+        setTiers(d.tiers_implique); applied++; sectionsApplied.add('Sinistre');
+      }
+    }
+
+    // ── Client-side: toutes les autres sections ──
+    const extras = extractAllSections(text);
+    applied += extras.count;
+    extras.sections.forEach(s => sectionsApplied.add(s));
+
+    const sectionList = [...sectionsApplied].join(', ');
+    info.innerHTML = applied > 0
+      ? `✅ ${applied} champ(s) — ${sectionList}`
+      : '💬 Continuez à parler…';
+    debounceSave();
+  } catch {
+    info.innerHTML = '⚠️ Erreur d\'extraction';
+  }
+}
+
+function ensureRdv() {
+  const data = state.current.data;
+  if (!data.rdv) data.rdv = [];
+  if (data.rdv.length === 0) {
+    data.rdv.push({ date:'', heure_debut:'', heure_fin:'',
+      assure:{ nom:'', qualite:'Propriétaire', convoque:true, present:true }, tiers:[] });
+  }
+}
+
+function updateTpSectionBadge() {
+  const labels = { intervenants:'Intervenants', contrat:'Contrat', sinistre:'Sinistre',
+    dommages:'Dommages', indemnisation:'Indemnisation', conclusion:'Conclusion' };
+  const badge = document.getElementById('tpSectionBadge');
+  if (badge) badge.textContent = labels[state.section] || state.section;
+}
+
+function extractAllSections(text) {
+  let count = 0;
+  const sections = new Set();
+  const norm = text.toLowerCase();
+
+  // ── INTERVENANTS: nom assuré, qualité, heure RDV ──
+  const namePatterns = [
+    /(?:je m'appelle|mon nom est|l'assuré(?:e)? (?:est|:)\s*)([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){0,2})/,
+    /(?:Madame|Monsieur|M\.|Mme)\s+([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){0,2})/i,
+  ];
+  for (const pat of namePatterns) {
+    const m = text.match(pat);
+    if (m && m[1]) {
+      ensureRdv();
+      if (!state.current.data.rdv[0].assure.nom) {
+        state.current.data.rdv[0].assure.nom = m[1].trim();
+        renderIntervenants(); count++; sections.add('Intervenants');
+      }
+      break;
+    }
+  }
+
+  const qualMap = [
+    ['copropriétaire','Copropriétaire'], ['locataire','Locataire'],
+    ['gérant','Gérant'], ['propriétaire','Propriétaire'],
+  ];
+  for (const [kw, val] of qualMap) {
+    if (norm.includes(kw)) {
+      ensureRdv();
+      if (state.current.data.rdv[0].assure.qualite !== val) {
+        state.current.data.rdv[0].assure.qualite = val;
+        renderIntervenants(); count++; sections.add('Intervenants');
+      }
+      break;
+    }
+  }
+
+  const timeM = norm.match(/(?:rendez-vous|rdv|réunion)?\s*(?:à|de)\s+(\d{1,2})h(?:(\d{2}))?/);
+  if (timeM) {
+    const hh = timeM[1].padStart(2,'0');
+    const mm = timeM[2] || '00';
+    ensureRdv();
+    if (!state.current.data.rdv[0].heure_debut) {
+      state.current.data.rdv[0].heure_debut = `${hh}:${mm}`;
+      renderIntervenants(); count++; sections.add('Intervenants');
+    }
+  }
+
+  // ── CONTRAT: type, conformité, description risque ──
+  if (norm.includes('professionnel') && !norm.includes('non professionnel')) {
+    setContratType('Professionnel'); count++; sections.add('Contrat');
+  }
+  if (norm.includes('non conforme') || norm.includes('pas conforme')) {
+    setConformite('Non'); count++; sections.add('Contrat');
+  } else if (/\bconforme\b/.test(norm)) {
+    setConformite('Oui'); count++; sections.add('Contrat');
+  }
+  if (state.section === 'contrat') {
+    const descEl = document.getElementById('f-desc-risque');
+    if (descEl && !descEl.value && text.length > 20) {
+      setFieldHighlight('f-desc-risque', text.slice(0, 500));
+      count++; sections.add('Contrat');
+    }
+  }
+
+  // ── SINISTRE: causes ──
+  const causesM = text.match(/(?:causé par|à cause de|suite à|en raison de|dû à|provoqué par)\s+(.{5,150}?)(?:[.,]|$)/i);
+  const causesEl = document.getElementById('f-causes');
+  if (causesM && causesEl && !causesEl.value) {
+    setFieldHighlight('f-causes', causesM[1].trim()); count++; sections.add('Sinistre');
+  }
+
+  // ── DOMMAGES: items avec montant ──
+  const dmgPat = /([a-zàâçéèêëîïôùûü][\w\sàâçéèêëîïôùûü'\-]{2,40}?)\s+(?:estimé[e]?|évalué[e]?|chiffré[e]?)\s*(?:à\s+)?(\d[\d\s]*(?:[,\.]\d{1,2})?)\s*(?:€|euros?)/gi;
+  let dm;
+  while ((dm = dmgPat.exec(text)) !== null) {
+    const designation = dm[1].trim();
+    const amount = parseFloat(dm[2].replace(/\s/g,'').replace(',','.'));
+    if (!isNaN(amount) && amount > 0 && designation.length > 2) {
+      const cats = getCategories();
+      if (!cats.autres) cats.autres = [];
+      if (!cats.autres.some(it => it.designation === designation)) {
+        cats.autres.push({ designation, qte:1, unite:'U', pu_ht:amount, vn:amount, vet:0 });
+        count++; sections.add('Dommages');
+      }
+    }
+  }
+  if (sections.has('Dommages')) renderDommages();
+
+  // ── CONCLUSION: convention, garantie, bénéficiaire, responsabilités ──
+  const convList = [
+    ['cide-cop','CIDE-COP'], ['cipiec','CIPIEC'], ['irsi t1','IRSI T1'],
+    ['irsi t2','IRSI T2'], ['irsi','IRSI T1'], ['cumul ass','Cumul Ass.'], ['sans objet','Sans objet'],
+  ];
+  for (const [kw, val] of convList) {
+    if (norm.includes(kw)) {
+      setConvention(val); count++; sections.add('Conclusion'); break;
+    }
+  }
+  if (/garantie\s+acquise|garantie\s+accord[eé]e/.test(norm)) {
+    setGarantie('Oui'); count++; sections.add('Conclusion');
+  } else if (/garantie\s+refus[eé]e|sans\s+garantie|garantie\s+non\s+acquise/.test(norm)) {
+    setGarantie('Non'); count++; sections.add('Conclusion');
+  }
+  const benM = text.match(/(?:bénéficiaire[:\s]+)([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){0,2})/i);
+  const benEl = document.getElementById('f-beneficiaire');
+  if (benM && benEl && !benEl.value) {
+    setFieldHighlight('f-beneficiaire', benM[1].trim()); count++; sections.add('Conclusion');
+  }
+  if (state.section === 'conclusion') {
+    const respM = text.match(/(?:responsab(?:le|ilité)(?:\s+de)?[:\s]+)(.{5,200}?)(?:\.|$)/i);
+    const respEl = document.getElementById('f-responsabilites');
+    if (respM && respEl && !respEl.value) {
+      setFieldHighlight('f-responsabilites', respM[1].trim()); count++; sections.add('Conclusion');
+    }
+    const conclM = text.match(/(?:en conclusion[,:\s]+|conclusion\s*:?\s*)(.{10,300}?)(?:\.|$)/i);
+    const conclEl = document.getElementById('f-conclusion-expert');
+    if (conclM && conclEl && !conclEl.value) {
+      setFieldHighlight('f-conclusion-expert', conclM[1].trim()); count++; sections.add('Conclusion');
+    }
+  }
+
+  return { count, sections };
+}
+
+function setFieldHighlight(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = val;
+  el.classList.add('auto-filled');
+  setTimeout(() => el.classList.remove('auto-filled'), 3000);
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function fmtEur(n) { return (n||0).toFixed(2).replace('.', ',') + ' €'; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+showView('list');
+loadDossiers();
+</script>
+</body>
+</html>

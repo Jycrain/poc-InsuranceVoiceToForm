@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "insurance-voice-to-form"
+version = "1.0.0"
+description = "Pipeline STT → NLP pour pré-remplir un formulaire d'expertise sinistre"
+requires-python = ">=3.10"
+
+dependencies = [
+    # API
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "python-multipart>=0.0.9",   # nécessaire pour File/Form FastAPI
+    # Validation & modèles
+    "pydantic>=2.6.0",
+    # Audio
+    "soundfile>=0.12.1",
+    "numpy>=1.26.0",
+    # STT (optionnel — lourd, commenté par défaut pour dev rapide)
+    # "nemo_toolkit[asr]>=1.23.0",
+    # "librosa>=0.10.0",
+]
+
+[project.optional-dependencies]
+stt = [
+    "nemo_toolkit[asr]>=1.23.0",
+    "librosa>=0.10.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",    # client async pour TestClient
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
