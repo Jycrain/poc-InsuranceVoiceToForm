@@ -18,6 +18,8 @@ dependencies = [
     # Audio
     "soundfile>=0.12.1",
     "numpy>=1.26.0",
+    # LLM (Ollama HTTP client)
+    "httpx>=0.27.0",
     # STT (optionnel — lourd, commenté par défaut pour dev rapide)
     # "nemo_toolkit[asr]>=1.23.0",
     # "librosa>=0.10.0",

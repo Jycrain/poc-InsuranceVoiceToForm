@@ -2,20 +2,25 @@
 API FastAPI — endpoints du projet IVF.
 
 Endpoints :
-  POST /upload-audio  → transcription + extraction → FormulaireExpertise (JSON)
-  POST /transcribe    → transcription brute uniquement
-  POST /extract-text  → extraction à partir d'un texte déjà transcrit
-  GET  /health        → healthcheck
+  POST /upload-audio     → transcription + extraction → FormulaireExpertise (JSON)
+  POST /transcribe       → transcription brute uniquement
+  POST /extract-text     → extraction regex depuis un texte déjà transcrit
+  POST /extract-dossier  → extraction LLM complète (6 sections) depuis un texte
+  GET  /health           → healthcheck
 """
 from __future__ import annotations
 
+import json
 import logging
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
-from src.core.models import FormulaireExpertise
+from src.core.config import OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_TIMEOUT
+from src.core.models import DossierExtraction, FormulaireExpertise
+from src.providers.llm_extractor import LLMDossierExtractor
+from src.providers.llm_ollama import OllamaLLMProvider
 from src.providers.nlp_extractor import FrenchInsuranceExtractor
 from src.providers.stt_parakeet import ParakeetTranscriber
 
@@ -46,6 +51,7 @@ def _safe_unlink(path: Path | None) -> None:
 # ---------------------------------------------------------------------------
 _transcriber: ParakeetTranscriber | None = None
 _extractor = FrenchInsuranceExtractor()
+_llm_extractor: LLMDossierExtractor | None = None
 
 
 def _get_transcriber(model_name: str | None = None) -> ParakeetTranscriber:
@@ -55,6 +61,21 @@ def _get_transcriber(model_name: str | None = None) -> ParakeetTranscriber:
             model_name=model_name or ParakeetTranscriber.DEFAULT_MODEL
         )
     return _transcriber
+
+
+def _get_llm_extractor() -> LLMDossierExtractor:
+    global _llm_extractor
+    if _llm_extractor is None:
+        provider = OllamaLLMProvider(
+            model=OLLAMA_MODEL,
+            host=OLLAMA_HOST,
+            timeout=OLLAMA_TIMEOUT,
+        )
+        _llm_extractor = LLMDossierExtractor(
+            llm_provider=provider,
+            fallback=_extractor,
+        )
+    return _llm_extractor
 
 
 # ---------------------------------------------------------------------------
@@ -144,3 +165,30 @@ async def extract_from_text(text: str = Form(..., description="Texte transcrit")
     Utile pour tester l'extracteur sans passer par le moteur STT.
     """
     return _extractor.extract(text)
+
+
+@router.post(
+    "/extract-dossier",
+    response_model=DossierExtraction,
+    summary="Extraction LLM complète — transcription → 6 sections du dossier",
+    status_code=status.HTTP_200_OK,
+)
+async def extract_dossier(
+    text: str = Form(..., description="Texte transcrit par le navigateur"),
+    current_section: str = Form(default="", description="(ignoré — conservé pour compat frontend)"),
+    existing_data: str = Form(default="{}", description="JSON des champs déjà remplis"),
+) -> DossierExtraction:
+    """
+    Pipeline LLM double-passe : transcription → Mistral (Ollama) → DossierExtraction.
+    Passe A : intervenants + contrat + sinistre.
+    Passe B : dommages + indemnisation + conclusion.
+    """
+    context: dict = {}
+    if existing_data and existing_data != "{}":
+        try:
+            context["existing_data"] = json.loads(existing_data)
+        except json.JSONDecodeError:
+            logger.warning("existing_data JSON invalide, ignoré")
+
+    extractor = _get_llm_extractor()
+    return await extractor.extract_dossier(text, context or None)

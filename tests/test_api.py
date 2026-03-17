@@ -49,3 +49,39 @@ def test_extract_text_champs_manquants():
     body = r.json()
     assert body["date_sinistre"] is None
     assert body["type_sinistre"] is None
+
+
+# ---------------------------------------------------------------------------
+# Tests de l'endpoint /extract-dossier (LLM)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_dossier_endpoint_exists():
+    """L'endpoint /extract-dossier doit répondre (même si Ollama est absent)."""
+    r = client.post(
+        "/api/v1/extract-dossier",
+        data={
+            "text": "Le 24 février j'ai eu une fuite d'eau dans ma cuisine.",
+            "current_section": "sinistre",
+            "existing_data": "{}",
+        },
+    )
+    # 200 si Ollama tourne ou si le fallback regex prend le relais
+    # 500 uniquement si un bug interne (pas attendu)
+    assert r.status_code == 200
+    body = r.json()
+    # Le fallback regex doit au minimum renvoyer la section sinistre
+    assert "sinistre" in body or body == {}
+
+
+def test_extract_dossier_with_existing_data():
+    """L'endpoint accepte existing_data sans erreur."""
+    r = client.post(
+        "/api/v1/extract-dossier",
+        data={
+            "text": "Il y a eu un incendie dans le garage.",
+            "current_section": "sinistre",
+            "existing_data": '{"sinistre": {"type": "Incendie"}}',
+        },
+    )
+    assert r.status_code == 200

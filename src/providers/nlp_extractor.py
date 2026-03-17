@@ -12,8 +12,15 @@ import re
 from datetime import date, datetime
 from typing import Optional
 
+from typing import Any
+
 from src.core.interfaces import NLPParserInterface
-from src.core.models import FormulaireExpertise, TypeSinistre
+from src.core.models import (
+    DossierExtraction,
+    FormulaireExpertise,
+    SinistreExtraction,
+    TypeSinistre,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,4 +187,21 @@ class FrenchInsuranceExtractor(NLPParserInterface):
             tiers_implique=tiers,
             description_courte=description or None,
             transcription_brute=transcription,
+        )
+
+    async def extract_dossier(
+        self,
+        transcription: str,
+        context: dict[str, Any] | None = None,
+    ) -> DossierExtraction:
+        """Fallback regex : ne couvre que la section sinistre."""
+        form = self.extract(transcription)
+        return DossierExtraction(
+            sinistre=SinistreExtraction(
+                date=str(form.date_sinistre) if form.date_sinistre else None,
+                type=form.type_sinistre,
+                localisation=form.localisation,
+                tiers_implique=form.tiers_implique,
+                dommages_desc=form.description_courte,
+            ),
         )

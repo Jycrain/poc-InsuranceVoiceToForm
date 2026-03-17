@@ -5,7 +5,9 @@ Aucune implémentation concrète ici, uniquement des contrats.
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from src.core.models import FormulaireExpertise
+from typing import Any, Optional
+
+from src.core.models import DossierExtraction, FormulaireExpertise
 
 
 class STTInterface(ABC):
@@ -32,6 +34,32 @@ class NLPParserInterface(ABC):
 
     @abstractmethod
     def extract(self, transcription: str) -> FormulaireExpertise:
+        """Extraire les champs du formulaire sinistre depuis une transcription."""
+
+    @abstractmethod
+    async def extract_dossier(
+        self,
+        transcription: str,
+        context: Optional[dict[str, Any]] = None,
+    ) -> DossierExtraction:
         """
-        Extraire les champs du formulaire sinistre depuis une transcription.
+        Extraire tous les champs du dossier (6 sections) depuis une transcription.
+
+        Args:
+            transcription: texte brut issu du STT.
+            context: dict optionnel avec :
+                - current_section : section active du formulaire
+                - existing_data   : champs déjà remplis (à ne pas écraser)
         """
+
+
+class LLMProviderInterface(ABC):
+    """Contrat pour tout fournisseur LLM (Ollama, Claude, OpenAI…)."""
+
+    @abstractmethod
+    async def complete_json(
+        self,
+        system_prompt: str,
+        user_message: str,
+    ) -> dict:
+        """Envoyer un prompt et obtenir une réponse JSON structurée."""

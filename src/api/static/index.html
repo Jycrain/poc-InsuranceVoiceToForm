@@ -727,7 +727,13 @@ async function save() {
     statut: document.getElementById('sidebarStatut').value,
     data,
   });
-  state.current = updated;
+  // Fusionner la réponse serveur sans écraser les données locales fraîches
+  state.current.id = updated.id;
+  state.current.reference = updated.reference;
+  state.current.statut = updated.statut;
+  state.current.updated_at = updated.updated_at;
+  // Ne PAS écraser state.current.data — on garde les données locales
+  // qui sont la source de vérité après applyExtraction + collectData
   updateDots();
 }
 
@@ -1162,7 +1168,6 @@ function startRecognition() {
     }
     state.transcript = finalTranscript;
     renderTranscript();
-    scheduleExtract();
   };
 
   state.recognition.onerror = (e) => {
@@ -1184,7 +1189,6 @@ function startRecognition() {
 function stopRecognition() {
   if (state.recognition) { state.recognition.onend = null; state.recognition.stop(); state.recognition = null; }
   state.transcribing = false;
-  clearTimeout(state.extractTimer);
   document.getElementById('tpToggleBtn').textContent = '▶ Démarrer';
   document.getElementById('recDot').classList.remove('active');
   document.getElementById('mic-btn').classList.remove('recording');
@@ -1202,52 +1206,308 @@ function clearTranscript() {
   renderTranscript();
 }
 
-function scheduleExtract() {
-  clearTimeout(state.extractTimer);
-  state.extractTimer = setTimeout(extractNow, 3000);
-}
+let _extracting = false;
 
 async function extractNow() {
+  if (_extracting) return; // éviter les appels concurrents
   const text = (finalTranscript + interimTranscript).trim();
   if (!text) return;
 
+  _extracting = true;
   const info = document.getElementById('tpExtractInfo');
-  info.innerHTML = '<span class="spinner"></span> Extraction en cours…';
+  info.innerHTML = '<span class="spinner"></span> Extraction IA en cours…';
 
   try {
-    // ── API: champs Sinistre (date, type, localisation, tiers, description) ──
     const fd = new FormData();
     fd.append('text', text);
-    const r = await fetch(`${API}/extract-text`, { method:'POST', body: fd });
-    const d = await r.json();
+    fd.append('current_section', state.section || '');
+    fd.append('existing_data', JSON.stringify(collectExistingData()));
 
-    let applied = 0;
-    const sectionsApplied = new Set();
+    const r = await fetch(`${API}/extract-dossier`, { method:'POST', body: fd });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const extraction = await r.json();
 
-    // Champs Sinistre (API) — appliqués uniquement sur la section Sinistre
-    if (state.section === 'sinistre') {
-      if (d.date_sinistre) { setFieldHighlight('f-date-sinistre', d.date_sinistre); applied++; sectionsApplied.add('Sinistre'); }
-      if (d.type_sinistre) { setFieldHighlight('f-type-sinistre', d.type_sinistre); applied++; sectionsApplied.add('Sinistre'); }
-      if (d.localisation)  { setFieldHighlight('f-localisation', d.localisation); applied++; sectionsApplied.add('Sinistre'); }
-      if (d.description_courte) { setFieldHighlight('f-circonstances', d.description_courte); applied++; sectionsApplied.add('Sinistre'); }
-      if (d.tiers_implique !== null && d.tiers_implique !== undefined) {
-        setTiers(d.tiers_implique); applied++; sectionsApplied.add('Sinistre');
-      }
+    const { count, sections } = applyExtraction(extraction);
+
+    // Recharger TOUTES les sections pour refléter les données en mémoire dans le DOM
+    if (count > 0) {
+      refreshAllSections();
+      // Sauvegarder une seule fois, de manière synchrone pour éviter le race condition
+      clearTimeout(state.saveTimer);
+      await save();
     }
 
-    // ── Client-side: toutes les autres sections ──
-    const extras = extractAllSections(text);
-    applied += extras.count;
-    extras.sections.forEach(s => sectionsApplied.add(s));
-
-    const sectionList = [...sectionsApplied].join(', ');
-    info.innerHTML = applied > 0
-      ? `✅ ${applied} champ(s) — ${sectionList}`
+    const sectionList = [...sections].join(', ');
+    info.innerHTML = count > 0
+      ? `✅ ${count} champ(s) — ${sectionList}`
       : '💬 Continuez à parler…';
-    debounceSave();
-  } catch {
+  } catch (err) {
+    console.error('Extraction LLM error:', err);
     info.innerHTML = '⚠️ Erreur d\'extraction';
+  } finally {
+    _extracting = false;
   }
+}
+
+function refreshAllSections() {
+  renderIntervenants();
+  loadContrat();
+  loadSinistre();
+  renderDommages();
+  computeIndemnisation();
+  loadConclusion();
+  document.getElementById('notesField').value = state.current?.data?.notes || document.getElementById('notesField').value;
+  if (state.current?.statut) document.getElementById('sidebarStatut').value = state.current.statut;
+  updateDots();
+}
+
+function collectExistingData() {
+  // N'envoyer QUE des valeurs réelles (string/number/bool métier).
+  // Pas de true/false pour signaler "champ rempli" : le LLM les interpréterait
+  // comme des valeurs et corromprait les retries.
+  const data = state.current?.data || {};
+  const rdv = data.rdv?.[0];
+  const c = data.contrat || {};
+  const co = data.conclusion || {};
+  const result = {};
+
+  // Intervenants — valeurs concrètes uniquement
+  const iv = {};
+  if (rdv?.assure?.nom)    iv.nom_assure    = rdv.assure.nom;
+  if (rdv?.assure?.qualite) iv.qualite_assure = rdv.assure.qualite;
+  if (rdv?.date)           iv.date_rdv      = rdv.date;
+  if (rdv?.heure_debut)    iv.heure_debut   = rdv.heure_debut;
+  if (rdv?.heure_fin)      iv.heure_fin     = rdv.heure_fin;
+  if ((rdv?.tiers||[]).length > 0) iv.tiers = rdv.tiers.map(t => ({nom:t.nom, role:t.role}));
+  if (Object.keys(iv).length) result.intervenants = iv;
+
+  // Contrat
+  const ct = {};
+  if (c.type)       ct.type      = c.type;
+  if (c.conformite) ct.conformite = c.conformite;
+  if (Object.keys(ct).length) result.contrat = ct;
+
+  // Sinistre — seulement les champs courts (pas les textarea longs)
+  const si = {};
+  const dateV = document.getElementById('f-date-sinistre')?.value;
+  const typeV = document.getElementById('f-type-sinistre')?.value;
+  const locV  = document.getElementById('f-localisation')?.value;
+  if (dateV) si.date        = dateV;
+  if (typeV) si.type        = typeV;
+  if (locV)  si.localisation = locV;
+  if (Object.keys(si).length) result.sinistre = si;
+
+  // Indemnisation
+  const franchise = parseFloat(document.getElementById('f-franchise')?.value);
+  if (franchise > 0) result.indemnisation = { franchise };
+
+  // Conclusion
+  const cc = {};
+  if (co.convention)      cc.convention      = co.convention;
+  if (co.garantie_acquise) cc.garantie_acquise = co.garantie_acquise;
+  if (co.avec_reserve)    cc.avec_reserve    = co.avec_reserve;
+  const benefV = document.getElementById('f-beneficiaire')?.value;
+  if (benefV) cc.beneficiaire = benefV;
+  if (Object.keys(cc).length) result.conclusion = cc;
+
+  return result;
+}
+
+function applyExtraction(ext) {
+  let count = 0;
+  const sections = new Set();
+
+  // ── INTERVENANTS : nom, qualité, convoqué, présent, RDV, tiers ──
+  if (ext.intervenants) {
+    const iv = ext.intervenants;
+    ensureRdv();
+    const rdv = state.current.data.rdv[0];
+    let changed = false;
+
+    // Assuré — nom
+    if (iv.nom_assure && !rdv.assure.nom) {
+      rdv.assure.nom = iv.nom_assure; count++; changed = true;
+    }
+    // Assuré — qualité
+    if (iv.qualite_assure) {
+      rdv.assure.qualite = iv.qualite_assure; count++; changed = true;
+    }
+    // Assuré — convoqué
+    if (iv.convoque_assure !== null && iv.convoque_assure !== undefined) {
+      rdv.assure.convoque = iv.convoque_assure; count++; changed = true;
+    }
+    // Assuré — présent
+    if (iv.present_assure !== null && iv.present_assure !== undefined) {
+      rdv.assure.present = iv.present_assure; count++; changed = true;
+    }
+    // RDV — date
+    if (iv.date_rdv && !rdv.date) {
+      rdv.date = iv.date_rdv; count++; changed = true;
+    }
+    // RDV — heure début
+    if (iv.heure_debut && !rdv.heure_debut) {
+      rdv.heure_debut = iv.heure_debut; count++; changed = true;
+    }
+    // RDV — heure fin
+    if (iv.heure_fin && !rdv.heure_fin) {
+      rdv.heure_fin = iv.heure_fin; count++; changed = true;
+    }
+    // Tiers — avec convoqué/présent
+    if (iv.tiers && iv.tiers.length > 0) {
+      iv.tiers.forEach(t => {
+        if (t.nom && !rdv.tiers.some(ex => ex.nom === t.nom)) {
+          rdv.tiers.push({
+            nom: t.nom,
+            role: t.role || '',
+            convoque: t.convoque ?? false,
+            present: t.present ?? false,
+          });
+          count++; changed = true;
+        } else if (t.nom) {
+          // Mettre à jour convoqué/présent sur un tiers existant
+          const existing = rdv.tiers.find(ex => ex.nom === t.nom);
+          if (existing) {
+            if (t.convoque !== null && t.convoque !== undefined) existing.convoque = t.convoque;
+            if (t.present !== null && t.present !== undefined) existing.present = t.present;
+            if (t.role && !existing.role) existing.role = t.role;
+            count++; changed = true;
+          }
+        }
+      });
+    }
+    if (changed) { sections.add('Intervenants'); renderIntervenants(); }
+  }
+
+  // ── CONTRAT : type, description risque, conformité ──
+  if (ext.contrat) {
+    const c = ext.contrat;
+    if (!state.current.data.contrat) state.current.data.contrat = {};
+    const dc = state.current.data.contrat;
+    if (c.type) { dc.type = c.type; setContratType(c.type, false); count++; sections.add('Contrat'); }
+    if (c.description_risque && !dc.description_risque) { dc.description_risque = c.description_risque; count++; sections.add('Contrat'); }
+    if (c.conformite) { dc.conformite = c.conformite; setConformite(c.conformite, false); count++; sections.add('Contrat'); }
+    if (c.conformite_description && !dc.conformite_description) { dc.conformite_description = c.conformite_description; count++; sections.add('Contrat'); }
+  }
+
+  // ── SINISTRE : date, type, localisation, tiers, circonstances, causes, dommages ──
+  if (ext.sinistre) {
+    const s = ext.sinistre;
+    if (!state.current.data.sinistre) state.current.data.sinistre = {};
+    const ds = state.current.data.sinistre;
+    if (s.date && !ds.date) { ds.date = s.date; count++; sections.add('Sinistre'); }
+    if (s.type) { ds.type = s.type; count++; sections.add('Sinistre'); }
+    if (s.localisation && !ds.localisation) { ds.localisation = s.localisation; count++; sections.add('Sinistre'); }
+    if (s.tiers_implique !== null && s.tiers_implique !== undefined) {
+      ds.tiers_implique = s.tiers_implique; setTiers(s.tiers_implique, false); count++; sections.add('Sinistre');
+    }
+    if (s.circonstances && !ds.circonstances) { ds.circonstances = s.circonstances; count++; sections.add('Sinistre'); }
+    if (s.causes && !ds.causes) { ds.causes = s.causes; count++; sections.add('Sinistre'); }
+    if (s.dommages_desc && !ds.dommages_desc) { ds.dommages_desc = s.dommages_desc; count++; sections.add('Sinistre'); }
+    // Sauvegarder la transcription brute
+    ds.transcription = (finalTranscript || '').trim();
+  }
+
+  // ── DOMMAGES : items avec vétusté ──
+  if (ext.dommages?.items?.length) {
+    const cats = getCategories();
+    ext.dommages.items.forEach(item => {
+      const cat = item.categorie || 'autres';
+      if (!cats[cat]) cats[cat] = [];
+      if (!cats[cat].some(ex => ex.designation === item.designation)) {
+        cats[cat].push({
+          designation: item.designation,
+          qte: item.qte || 1,
+          unite: item.unite || 'U',
+          pu_ht: item.pu_ht || 0,
+          vn: (item.qte || 1) * (item.pu_ht || 0),
+          vet: item.vet || 0,
+        });
+        count++; sections.add('Dommages');
+      }
+    });
+    if (sections.has('Dommages')) renderDommages();
+  }
+
+  // ── INDEMNISATION : franchise ──
+  if (ext.indemnisation?.franchise !== null && ext.indemnisation?.franchise !== undefined) {
+    const el = document.getElementById('f-franchise');
+    if (el && !el.value) {
+      el.value = ext.indemnisation.franchise;
+      el.classList.add('auto-filled');
+      setTimeout(() => el.classList.remove('auto-filled'), 3000);
+      // Mettre à jour le modèle de données
+      if (!state.current.data.indemnisation) state.current.data.indemnisation = {};
+      state.current.data.indemnisation.franchise = ext.indemnisation.franchise;
+      count++; sections.add('Indemnisation');
+    }
+  }
+
+  // ── CONCLUSION : responsabilités, convention, garantie, réserve, recours ──
+  if (ext.conclusion) {
+    const c = ext.conclusion;
+    if (!state.current.data.conclusion) state.current.data.conclusion = {};
+    const dco = state.current.data.conclusion;
+    if (c.responsabilites && !dco.responsabilites) { dco.responsabilites = c.responsabilites; count++; sections.add('Conclusion'); }
+    if (c.convention) { dco.convention = c.convention; setConvention(c.convention, false); count++; sections.add('Conclusion'); }
+    if (c.garantie_acquise) { dco.garantie_acquise = c.garantie_acquise; setGarantie(c.garantie_acquise, false); count++; sections.add('Conclusion'); }
+    if (c.avec_reserve !== null && c.avec_reserve !== undefined) {
+      dco.avec_reserve = c.avec_reserve; count++; sections.add('Conclusion');
+    }
+    if (c.garantie_applicable && !dco.garantie_applicable) { dco.garantie_applicable = c.garantie_applicable; count++; sections.add('Conclusion'); }
+    if (c.beneficiaire && !dco.beneficiaire) { dco.beneficiaire = c.beneficiaire; count++; sections.add('Conclusion'); }
+    if (c.garantie_description && !dco.garantie_description) { dco.garantie_description = c.garantie_description; count++; sections.add('Conclusion'); }
+    if (c.conclusion_expert && !dco.conclusion_expert) { dco.conclusion_expert = c.conclusion_expert; count++; sections.add('Conclusion'); }
+    // Recours — liste d'actions
+    if (c.recours && c.recours.length > 0) {
+      if (!dco.recours) dco.recours = [];
+      c.recours.forEach(r => {
+        if (r && !dco.recours.includes(r)) {
+          dco.recours.push(r);
+          count++; sections.add('Conclusion');
+        }
+      });
+      renderRecours(dco.recours);
+    }
+  }
+
+  // ── NOTES ──
+  if (ext.notes) {
+    const el = document.getElementById('notesField');
+    if (el) {
+      const existing = el.value.trim();
+      if (!existing) {
+        el.value = ext.notes;
+        state.current.data.notes = ext.notes;
+      } else if (!existing.includes(ext.notes)) {
+        el.value = existing + '\n' + ext.notes;
+        state.current.data.notes = el.value;
+      }
+      el.classList.add('auto-filled');
+      setTimeout(() => el.classList.remove('auto-filled'), 3000);
+      count++; sections.add('Notes');
+    }
+  }
+
+  // ── STATUT ──
+  if (ext.statut && ['À traiter', 'En cours', 'Clôturé'].includes(ext.statut)) {
+    if (state.current.statut !== ext.statut) {
+      state.current.statut = ext.statut;
+      const badge = document.querySelector('.statut-badge');
+      if (badge) badge.textContent = ext.statut;
+      count++; sections.add('Statut');
+    }
+  }
+
+  return { count, sections };
+}
+
+function setFieldIfEmpty(id, val) {
+  const el = document.getElementById(id);
+  if (!el || !val) return;
+  if (el.value && el.value.trim()) return;
+  el.value = val;
+  el.classList.add('auto-filled');
+  setTimeout(() => el.classList.remove('auto-filled'), 3000);
 }
 
 function ensureRdv() {
@@ -1264,131 +1524,6 @@ function updateTpSectionBadge() {
     dommages:'Dommages', indemnisation:'Indemnisation', conclusion:'Conclusion' };
   const badge = document.getElementById('tpSectionBadge');
   if (badge) badge.textContent = labels[state.section] || state.section;
-}
-
-function extractAllSections(text) {
-  let count = 0;
-  const sections = new Set();
-  const norm = text.toLowerCase();
-
-  // ── INTERVENANTS: nom assuré, qualité, heure RDV ──
-  const namePatterns = [
-    /(?:je m'appelle|mon nom est|l'assuré(?:e)? (?:est|:)\s*)([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){0,2})/,
-    /(?:Madame|Monsieur|M\.|Mme)\s+([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){0,2})/i,
-  ];
-  for (const pat of namePatterns) {
-    const m = text.match(pat);
-    if (m && m[1]) {
-      ensureRdv();
-      if (!state.current.data.rdv[0].assure.nom) {
-        state.current.data.rdv[0].assure.nom = m[1].trim();
-        renderIntervenants(); count++; sections.add('Intervenants');
-      }
-      break;
-    }
-  }
-
-  const qualMap = [
-    ['copropriétaire','Copropriétaire'], ['locataire','Locataire'],
-    ['gérant','Gérant'], ['propriétaire','Propriétaire'],
-  ];
-  for (const [kw, val] of qualMap) {
-    if (norm.includes(kw)) {
-      ensureRdv();
-      if (state.current.data.rdv[0].assure.qualite !== val) {
-        state.current.data.rdv[0].assure.qualite = val;
-        renderIntervenants(); count++; sections.add('Intervenants');
-      }
-      break;
-    }
-  }
-
-  const timeM = norm.match(/(?:rendez-vous|rdv|réunion)?\s*(?:à|de)\s+(\d{1,2})h(?:(\d{2}))?/);
-  if (timeM) {
-    const hh = timeM[1].padStart(2,'0');
-    const mm = timeM[2] || '00';
-    ensureRdv();
-    if (!state.current.data.rdv[0].heure_debut) {
-      state.current.data.rdv[0].heure_debut = `${hh}:${mm}`;
-      renderIntervenants(); count++; sections.add('Intervenants');
-    }
-  }
-
-  // ── CONTRAT: type, conformité, description risque ──
-  if (norm.includes('professionnel') && !norm.includes('non professionnel')) {
-    setContratType('Professionnel'); count++; sections.add('Contrat');
-  }
-  if (norm.includes('non conforme') || norm.includes('pas conforme')) {
-    setConformite('Non'); count++; sections.add('Contrat');
-  } else if (/\bconforme\b/.test(norm)) {
-    setConformite('Oui'); count++; sections.add('Contrat');
-  }
-  if (state.section === 'contrat') {
-    const descEl = document.getElementById('f-desc-risque');
-    if (descEl && !descEl.value && text.length > 20) {
-      setFieldHighlight('f-desc-risque', text.slice(0, 500));
-      count++; sections.add('Contrat');
-    }
-  }
-
-  // ── SINISTRE: causes ──
-  const causesM = text.match(/(?:causé par|à cause de|suite à|en raison de|dû à|provoqué par)\s+(.{5,150}?)(?:[.,]|$)/i);
-  const causesEl = document.getElementById('f-causes');
-  if (causesM && causesEl && !causesEl.value) {
-    setFieldHighlight('f-causes', causesM[1].trim()); count++; sections.add('Sinistre');
-  }
-
-  // ── DOMMAGES: items avec montant ──
-  const dmgPat = /([a-zàâçéèêëîïôùûü][\w\sàâçéèêëîïôùûü'\-]{2,40}?)\s+(?:estimé[e]?|évalué[e]?|chiffré[e]?)\s*(?:à\s+)?(\d[\d\s]*(?:[,\.]\d{1,2})?)\s*(?:€|euros?)/gi;
-  let dm;
-  while ((dm = dmgPat.exec(text)) !== null) {
-    const designation = dm[1].trim();
-    const amount = parseFloat(dm[2].replace(/\s/g,'').replace(',','.'));
-    if (!isNaN(amount) && amount > 0 && designation.length > 2) {
-      const cats = getCategories();
-      if (!cats.autres) cats.autres = [];
-      if (!cats.autres.some(it => it.designation === designation)) {
-        cats.autres.push({ designation, qte:1, unite:'U', pu_ht:amount, vn:amount, vet:0 });
-        count++; sections.add('Dommages');
-      }
-    }
-  }
-  if (sections.has('Dommages')) renderDommages();
-
-  // ── CONCLUSION: convention, garantie, bénéficiaire, responsabilités ──
-  const convList = [
-    ['cide-cop','CIDE-COP'], ['cipiec','CIPIEC'], ['irsi t1','IRSI T1'],
-    ['irsi t2','IRSI T2'], ['irsi','IRSI T1'], ['cumul ass','Cumul Ass.'], ['sans objet','Sans objet'],
-  ];
-  for (const [kw, val] of convList) {
-    if (norm.includes(kw)) {
-      setConvention(val); count++; sections.add('Conclusion'); break;
-    }
-  }
-  if (/garantie\s+acquise|garantie\s+accord[eé]e/.test(norm)) {
-    setGarantie('Oui'); count++; sections.add('Conclusion');
-  } else if (/garantie\s+refus[eé]e|sans\s+garantie|garantie\s+non\s+acquise/.test(norm)) {
-    setGarantie('Non'); count++; sections.add('Conclusion');
-  }
-  const benM = text.match(/(?:bénéficiaire[:\s]+)([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){0,2})/i);
-  const benEl = document.getElementById('f-beneficiaire');
-  if (benM && benEl && !benEl.value) {
-    setFieldHighlight('f-beneficiaire', benM[1].trim()); count++; sections.add('Conclusion');
-  }
-  if (state.section === 'conclusion') {
-    const respM = text.match(/(?:responsab(?:le|ilité)(?:\s+de)?[:\s]+)(.{5,200}?)(?:\.|$)/i);
-    const respEl = document.getElementById('f-responsabilites');
-    if (respM && respEl && !respEl.value) {
-      setFieldHighlight('f-responsabilites', respM[1].trim()); count++; sections.add('Conclusion');
-    }
-    const conclM = text.match(/(?:en conclusion[,:\s]+|conclusion\s*:?\s*)(.{10,300}?)(?:\.|$)/i);
-    const conclEl = document.getElementById('f-conclusion-expert');
-    if (conclM && conclEl && !conclEl.value) {
-      setFieldHighlight('f-conclusion-expert', conclM[1].trim()); count++; sections.add('Conclusion');
-    }
-  }
-
-  return { count, sections };
 }
 
 function setFieldHighlight(id, val) {
